@@ -5,21 +5,26 @@ import WishDataSchema from '../schemas/wishData.json';
 import WishRequestSchema from '../schemas/wishRequest.json';
 import WishTotalDataSchema from '../schemas/wishTotalData.json';
 import WishSummaryRequestSchema from '../schemas/wishSummaryRequest.json';
+import WishSummaryLuckRequestSchema from '../schemas/wishSummaryLuckRequest.json';
+import WishConstellationDataSchema from '../schemas/wishConstellationData.json';
 import { WishRequest } from '../types/wishRequest';
 import { WishData } from '../types/wishData';
 import { WishTotalData } from '../types/wishTotalData';
+import { WishConstellationData } from '../types/wishConstellationData';
 
 import { banners } from '../data/banners';
 import { getWishTallyData } from '../queue/tally';
 import wishTallyQueue from '../queue/wish';
 import wishTotalQueue from '../queue/wishTotal';
+import wishConstellationQueue from '../queue/wishConstellation';
 import { tallyCount } from '../stores/counter';
 import { authorization } from '../hooks/auth';
 import { WishSummaryRequest } from '../types/wishSummaryRequest';
-import { wishSummary } from '../stores/wishSummary';
+import { WishSummaryLuckRequest } from '../types/wishSummaryLuckRequest';
+import { wishSummary, wishSummaryLuck4, wishSummaryLuck5, wishSummaryWinRateOff4, wishSummaryWinRateOff5 } from '../stores/wishSummary';
 
-const LATEST_CHARACTER_BANNER = 300030;
-const LATEST_WEAPON_BANNER = 400029;
+const LATEST_CHARACTER_BANNER = 300031;
+const LATEST_WEAPON_BANNER = 400030;
 
 export default async function (server: FastifyInstance): Promise<void> {
   server.get(
@@ -100,6 +105,19 @@ export default async function (server: FastifyInstance): Promise<void> {
     },
   );
 
+  server.post<{ Body: WishConstellationData }>(
+    '/wish/constellation',
+    {
+      schema: {
+        body: WishConstellationDataSchema,
+      },
+    },
+    async function (req, reply) {
+      void wishConstellationQueue.add(req.body);
+      return { status: 'queued' };
+    },
+  );
+
   server.get<{ Querystring: WishSummaryRequest }>(
     '/wish/summary',
     {
@@ -112,6 +130,50 @@ export default async function (server: FastifyInstance): Promise<void> {
         throw new HttpErrors.NotFound();
       }
       return wishSummary[req.query.banner];
+    },
+  );
+
+  server.get<{ Querystring: WishSummaryLuckRequest }>(
+    '/wish/summary/luck',
+    {
+      schema: {
+        querystring: WishSummaryLuckRequestSchema,
+      },
+    },
+    async function (req, reply) {
+      let source = null;
+      if (req.query.rarity === 'legendary') {
+        source = wishSummaryLuck5;
+      } else {
+        source = wishSummaryLuck4;
+      }
+
+      if (source[req.query.banner] === undefined) {
+        throw new HttpErrors.NotFound();
+      }
+      return source[req.query.banner];
+    },
+  );
+
+  server.get<{ Querystring: WishSummaryLuckRequest }>(
+    '/wish/summary/winrateoff',
+    {
+      schema: {
+        querystring: WishSummaryLuckRequestSchema,
+      },
+    },
+    async function (req, reply) {
+      let source = null;
+      if (req.query.rarity === 'legendary') {
+        source = wishSummaryWinRateOff5;
+      } else {
+        source = wishSummaryWinRateOff4;
+      }
+
+      if (source[req.query.banner] === undefined) {
+        throw new HttpErrors.NotFound();
+      }
+      return source[req.query.banner];
     },
   );
 }
